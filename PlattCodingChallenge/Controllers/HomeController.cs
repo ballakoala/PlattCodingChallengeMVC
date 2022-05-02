@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using PlattCodingChallenge.Models;
 using System;
 using System.Collections.Generic;
@@ -45,58 +46,58 @@ namespace PlattCodingChallenge.Controllers
 
 		public ActionResult VehicleSummary()
 		{
-			var model = new VehicleSummaryViewModel();
-
-			// TODO: Implement this controller action
-
 			SWAPIVehicleResults vehicleResults = GetSWAPIVehicles();
 
-			vehicleResults.results.Where(v => v.cost_in_credits != "unknown");
-
-			model.VehicleCount = vehicleResults.count;
+			var model = new VehicleSummaryViewModel();
+			model.Details = vehicleResults.Vehicles.Where(v => v.Cost != "unknown")
+				.GroupBy(v => v.ManufacturerName).Select(g =>
+				{
+					return new VehicleStatsViewModel()
+					{
+						ManufacturerName = g.Key,
+						VehicleCount = g.Count(),
+						AverageCost = g.Average(v => int.Parse(v.Cost))
+					};
+				})
+				.OrderByDescending(m => m.VehicleCount)
+				.ThenByDescending(m => m.AverageCost)
+				.ToList();
+			model.VehicleCount = model.Details.Sum(vStats => vStats.VehicleCount);
+			model.ManufacturerCount = model.Details.Count();
 
 			return View(model);
 		}
 
 		public class SWAPIVehicleResults
         {
-			public int count { get; set; }
-            public string next { get; set; }
-            public string previous { get; set; }
-			public List<SWAPVehicle> results { get; set; }
+			[JsonProperty(PropertyName = "count")]
+			public int TotalVehicleCount { get; set; }
+
+			[JsonProperty(PropertyName = "next")]
+			public string NextAPIURI { get; set; }
+
+			[JsonProperty(PropertyName = "previous")]
+			public string PreviousAPIURI { get; set; }
+
+			[JsonProperty(PropertyName = "results")]
+			public List<SWAPVehicle> Vehicles { get; set; }
 		}
 
 		public class SWAPVehicle
         {
-            public string cargo_capacity { get; set; }
-            public string consumables { get; set; }
-            public string cost_in_credits { get; set; }
-            public string created { get; set; }
-            public string crew { get; set; }
-            public string edited { get; set; }
-            public string length { get; set; }
-            public string manufacturer { get; set; }
-            public string max_atmosphering_speed { get; set; }
-            public string model { get; set; }
-            public string name { get; set; }
-            public string passengers { get; set; }
-            //public string pilots { get; set; }
-            public List<string> films { get; set; }
-            public string url { get; set; }
-            public string vehicle_class { get; set; }
+			[JsonProperty(PropertyName = "cost_in_credits")]
+			public string Cost { get; set; }
+
+			[JsonProperty(PropertyName = "manufacturer")]
+			public string ManufacturerName { get; set; }
         }
 
 		// https://stackoverflow.com/questions/9620278/how-do-i-make-calls-to-a-rest-api-using-c
 		private SWAPIVehicleResults GetSWAPIVehicles(SWAPIVehicleResults previousVehicleResults = null)
 		{
-			if (previousVehicleResults == null)
-            {
-				previousVehicleResults = new SWAPIVehicleResults();
-
-			}
 			HttpClient httpClient = new HttpClient();
-			Uri baseUri = string.IsNullOrWhiteSpace(previousVehicleResults?.next) 
-				? new Uri(previousVehicleResults.next) 
+			Uri baseUri = !string.IsNullOrWhiteSpace(previousVehicleResults?.NextAPIURI) 
+				? new Uri(previousVehicleResults.NextAPIURI) 
 				: new Uri("https://swapi.dev/api/vehicles/");
 			httpClient.BaseAddress = baseUri;
 
@@ -109,16 +110,16 @@ namespace PlattCodingChallenge.Controllers
 
 				if (previousVehicleResults != null)
 				{
-					SWAPIVehicleResults vehicleSummaryViewModel = JsonSerializer.Deserialize<SWAPIVehicleResults>(dataObjects);
-					vehicleSummaryViewModel.results.AddRange(previousVehicleResults.results);
+					SWAPIVehicleResults vehicleSummaryViewModel = JsonConvert.DeserializeObject<SWAPIVehicleResults>(dataObjects);
+					vehicleSummaryViewModel.Vehicles.AddRange(previousVehicleResults.Vehicles);
 					previousVehicleResults = vehicleSummaryViewModel;
 				}
 				else
                 {
-					previousVehicleResults = JsonSerializer.Deserialize<SWAPIVehicleResults>(dataObjects);
+					previousVehicleResults = JsonConvert.DeserializeObject<SWAPIVehicleResults>(dataObjects);
 				}
 
-				if (previousVehicleResults.next != null)
+				if (previousVehicleResults.NextAPIURI != null)
                 {
 					previousVehicleResults = GetSWAPIVehicles(previousVehicleResults);
                 }
