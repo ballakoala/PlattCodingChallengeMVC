@@ -42,6 +42,7 @@ namespace PlattCodingChallenge.Controllers
 			var model = new VehicleSummaryViewModel();
 
 			// TODO: Implement this controller action
+			// YEAHH BOI GONNA DO STUFF HERERERERE!!!
 
 			return View(model);
 		}
